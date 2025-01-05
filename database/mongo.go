@@ -3,10 +3,9 @@ package database
 import (
 	"context"
 	"fmt"
-
 	"go-auth/models"
-	//"log"
-	//"os"
+	"log"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -14,6 +13,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+var mongoClient *mongo.Client
 var client *mongo.Client
 var usersCollection *mongo.Collection
 
@@ -29,7 +29,12 @@ func InitMongoDB(mongoURI string) error {
 	}
 
 	client = c
-	usersCollection = client.Database("auth_db").Collection("users")
+
+	// Получаем имя базы данных и коллекции из переменных окружения
+	dbName := os.Getenv("MONGO_DB_NAME")
+	collectionName := os.Getenv("MONGO_COLLECTION_NAME")
+	usersCollection = client.Database(dbName).Collection(collectionName)
+
 	return nil
 }
 
@@ -44,8 +49,36 @@ func FindUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	return &user, nil
 }
 
-// Функция для добавления нового пользователя в MongoDB
 func CreateUser(ctx context.Context, user *models.User) error {
 	_, err := usersCollection.InsertOne(ctx, user)
-	return err
+	if err != nil {
+		log.Printf("Ошибка добавления пользователя в MongoDB: %v", err)
+		return err
+	}
+	return nil
+}
+
+var TestCollection *mongo.Collection
+
+func InitTestCollection(dbName string) {
+	TestCollection = client.Database(dbName).Collection("tests")
+}
+
+// SaveTest сохраняет тест в коллекцию MongoDB
+func SaveTest(testName string, questions []string) error {
+	collection := mongoClient.Database("your_database_name").Collection("tests")
+
+	testDocument := bson.M{
+		"testName":  testName,
+		"questions": questions,
+	}
+
+	_, err := collection.InsertOne(context.TODO(), testDocument)
+	if err != nil {
+		log.Printf("Ошибка при сохранении теста: %v", err)
+		return err
+	}
+
+	log.Println("Тест успешно сохранен:", testName)
+	return nil
 }
