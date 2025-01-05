@@ -1,7 +1,10 @@
 package auth
 
 import (
-	"fmt"
+	"crypto/rand"
+	"encoding/hex"
+
+	//"fmt"
 	"log"
 	"os"
 
@@ -9,21 +12,27 @@ import (
 	"golang.org/x/net/context"
 )
 
-var rdb *redis.Client
+var rdb *redis.Client // Основной клиент Redis
 
 // Инициализация Redis
 func InitRedis() error {
-	rdb = redis.NewClient(&redis.Options{
-		Addr:     os.Getenv("REDIS_ADDR"), // Адрес Redis сервера
-		Password: "",                      // Нет пароля (по умолчанию)
-		DB:       0,                       // Используем 0-й БД
-	})
-
-	_, err := rdb.Ping(context.Background()).Result()
-	if err != nil {
-		return fmt.Errorf("Error connecting to Redis: %v", err)
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		addr = "localhost:6379"
 	}
 
+	client := redis.NewClient(&redis.Options{
+		Addr: addr,
+	})
+
+	// Проверяем соединение
+	_, err := client.Ping(context.Background()).Result()
+	if err != nil {
+		return err
+	}
+
+	log.Println("Redis успешно инициализирован")
+	rdb = client // Присваиваем глобальной переменной
 	return nil
 }
 
@@ -37,3 +46,29 @@ func SetCache(key string, value string) error {
 	return nil
 }
 
+// Установка статуса пользователя
+func SetUserStatus(sessionToken string, status string) error {
+	ctx := context.Background()
+	return rdb.HSet(ctx, sessionToken, "status", status).Err()
+}
+
+// Получение статуса пользователя
+func GetUserStatus(sessionToken string) (string, error) {
+	ctx := context.Background()
+	return rdb.HGet(ctx, sessionToken, "status").Result()
+}
+
+// Удаление статуса пользователя
+func DeleteUserStatus(sessionToken string) error {
+	ctx := context.Background()
+	return rdb.Del(ctx, sessionToken).Err()
+}
+
+func GenerateSessionToken() string {
+	bytes := make([]byte, 16) // 16 байт для токена (128 бит)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Printf("Error generating session token: %v", err)
+		return ""
+	}
+	return hex.EncodeToString(bytes)
+}
